@@ -1,11 +1,10 @@
 import { updateChat, getChats } from "@week11/core/database";
 
 export async function main(event) {
-  const sub = event.requestContext.authorizer?.jwt.claims.sub;
   const { chatId } = event.pathParameters;
   const body = JSON.parse(event.body);
 
-  await updateChat(body.newName, chatId, sub);
+  await updateChat(body.newName, chatId, body.sub);
 
   const newChats = await getChats();
 

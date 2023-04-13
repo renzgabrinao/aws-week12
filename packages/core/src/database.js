@@ -75,14 +75,20 @@ export async function getMessages(id) {
   return res.rows;
 }
 
-export async function createMessage(chatId, content, user_id, username) {
+export async function createMessage(
+  chatId,
+  content,
+  contentType,
+  user_id,
+  username
+) {
   const res = await getPool().query(
     `
-  INSERT INTO messages (chat_id, content, user_id, username)
-  VALUES ($1, $2, $3, $4)
+  INSERT INTO messages (chat_id, content, content_type, user_id, username)
+  VALUES ($1, $2, $3, $4, $5)
   RETURNING *
   `,
-    [chatId, content, user_id, username]
+    [chatId, content, contentType, user_id, username]
   );
   return res.rows[0];
 }
@@ -100,15 +106,16 @@ export async function deleteMessage(id, user_id) {
   return res.rows[0];
 }
 
-export async function updateMessage(content, messageId, user_id) {
+export async function updateMessage(content, contentType, messageId, user_id) {
   const res = await getPool().query(
     `
     UPDATE messages 
-    SET content = ($1)
-    WHERE id = ($2) AND
-    user_id = ($3)
+    SET content = ($1),
+    content_type = ($2)
+    WHERE id = ($3) AND
+    user_id = ($4)
     `,
-    [content, messageId, user_id]
+    [content, contentType, messageId, user_id]
   );
   return res.rows[0];
 }

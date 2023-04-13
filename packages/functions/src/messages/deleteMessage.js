@@ -1,10 +1,10 @@
 import { deleteMessage, getMessages } from "@week11/core/database";
 
 export async function main(event) {
-  const sub = event.requestContext.authorizer?.jwt.claims.sub;
+  const body = JSON.parse(event.body);
   const { chatId, messageId } = event.pathParameters;
 
-  await deleteMessage(messageId, sub);
+  await deleteMessage(messageId, body.sub);
 
   const messages = await getMessages(chatId);
   return {

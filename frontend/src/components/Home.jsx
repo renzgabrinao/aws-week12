@@ -1,4 +1,4 @@
-import { Auth, API } from "aws-amplify";
+import { Auth, API, Storage } from "aws-amplify";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { useState, useEffect } from "react";
 
@@ -9,6 +9,11 @@ export default function Home() {
   // AUTH STUFF
   const { user, signOut } = useAuthenticator((context) => [context.user]);
 
+  // can get the username with this method:::
+  //
+  //    const tokens = await Auth.currentSession();
+  //    const userName = tokens.getIdToken().payload['cognito:username'];
+
   const publicRequest = async () => {
     const response = await API.get("api", "/chats");
     alert(JSON.stringify(response));
@@ -18,14 +23,7 @@ export default function Home() {
     try {
       const response = await API.get(
         "api",
-        "/messages/5afec214-6bbc-47fe-9b0a-dcc18f88bbec",
-        {
-          headers: {
-            Authorization: `Bearer ${(await Auth.currentSession())
-              .getAccessToken()
-              .getJwtToken()}`,
-          },
-        }
+        "/messages/5afec214-6bbc-47fe-9b0a-dcc18f88bbec"
       );
       alert(JSON.stringify(response));
     } catch (error) {
@@ -34,8 +32,6 @@ export default function Home() {
   };
 
   // CHATS N MESSAGES STUFF
-  const apiUrl = import.meta.env.VITE_APP_API_URL;
-
   const [currentChat, setCurrentChat] = useState("");
 
   const [chats, setChats] = useState([]);
@@ -44,42 +40,54 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
 
+  const [file, setFile] = useState(null);
+
   const [errorMsg, setErrorMsg] = useState(null);
 
   useEffect(() => {
-    console.log(apiUrl);
     const getChatRooms = async () => {
       await API.get("api", "/chats").then((res) => setChats(res.chats));
     };
     getChatRooms();
-    console.log(user.attributes?.sub);
   }, []);
 
-  const getChatMessages = (id) => {
+  const getChatMessages = async (id) => {
     setCurrentChat(id);
 
-    axios
-      .get(apiUrl + "/messages/" + id)
-      .then((res) => setMessages(res.data.messages));
+    const res = await API.get("api", `/messages/${id}`);
+    const messages = res.messages;
+    for (const message of messages) {
+      if (message.content_type === "image") {
+        await Storage.get(message.content).then((url) => {
+          message.url = url;
+        });
+      }
+    }
+    setMessages(messages);
   };
 
   const handleCreateChat = async (e) => {
     e.preventDefault();
+
+    const tokens = await Auth.currentSession();
+
+    // grab username and sub
+    const userName = tokens.getIdToken().payload["cognito:username"];
+    const sub = tokens.accessToken.payload.sub;
+
     if (!!!newChat) {
       setErrorMsg("You need to enter a name");
       return;
     }
-    await API.post("api", "/chats", {
+
+    const res = await API.post("api", "/chats", {
       body: {
         name: newChat,
+        userName: userName,
+        sub: sub,
       },
-      headers: {
-        Authorization: `Bearer ${(await Auth.currentSession())
-          .getAccessToken()
-          .getJwtToken()}`,
-      },
-    }).then((res) => setChats(res.chats));
-
+    });
+    setChats(res.chats);
     setErrorMsg(null);
     setNewChat("");
   };
@@ -87,17 +95,31 @@ export default function Home() {
   const handleCreateMessage = async (e) => {
     e.preventDefault();
 
-    await API.post("api", "/messages", {
+    const tokens = await Auth.currentSession();
+
+    // grab username and sub
+    const userName = tokens.getIdToken().payload["cognito:username"];
+    const sub = tokens.accessToken.payload.sub;
+
+    const res = await API.post("api", "/messages", {
       body: {
         chatId: currentChat,
         content: newMessage,
+        userName: userName,
+        sub: sub,
+        type: "text",
       },
-      headers: {
-        Authorization: `Bearer ${(await Auth.currentSession())
-          .getAccessToken()
-          .getJwtToken()}`,
-      },
-    }).then((res) => setMessages(res.messages));
+    });
+
+    const messages = res.messages;
+    for (const message of messages) {
+      if (message.content_type === "image") {
+        await Storage.get(message.content).then((url) => {
+          message.url = url;
+        });
+      }
+    }
+    setMessages(messages);
 
     setNewMessage("");
   };
@@ -105,6 +127,53 @@ export default function Home() {
   const handleExitRoom = () => {
     setCurrentChat("");
     setMessages([]);
+  };
+
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+  };
+
+  const handleSend = async (event) => {
+    event.preventDefault();
+    try {
+      const s3Options = {
+        contentType: file.type,
+        progressCallback(progress) {
+          console.log(`Uploaded: ${progress.loaded / progress.total}`);
+        },
+      };
+      const uniqueName = `${Date.now()}-${file.name}`;
+      const result = await Storage.put(uniqueName, file, s3Options);
+      console.log("File uploaded successfully!");
+
+      const tokens = await Auth.currentSession();
+
+      // grab username and sub
+      const userName = tokens.getIdToken().payload["cognito:username"];
+      const sub = tokens.accessToken.payload.sub;
+
+      const response = await API.post("api", "/messages", {
+        body: {
+          chatId: currentChat,
+          content: result.key,
+          userName: userName,
+          sub: sub,
+          type: "image",
+        },
+      });
+      const messages = response.messages;
+      for (const message of messages) {
+        if (message.content_type === "image") {
+          await Storage.get(message.content).then((url) => {
+            message.url = url;
+          });
+        }
+      }
+      setMessages(messages);
+      setFile(null);
+    } catch (error) {
+      console.log("Error uploading file:", error);
+    }
   };
 
   return (
@@ -115,19 +184,7 @@ export default function Home() {
             {user?.username} || {user?.attributes.email}
           </p>
         </div>
-        <div className="w-[400px] flex flex-row justify-between">
-          <button
-            className="border-2 border-black bg-green-800 hover:bg-green-500 hover:text-black transition-all rounded-lg py-1 px-2"
-            onClick={publicRequest}
-          >
-            Public Request
-          </button>
-          <button
-            className="border-2 border-black bg-green-800 hover:bg-green-500 hover:text-black transition-all rounded-lg py-1 px-2"
-            onClick={privateRequest}
-          >
-            Private Request
-          </button>
+        <div className="">
           <button
             className="border-2 border-black bg-red-800 hover:bg-red-500 hover:text-black transition-all rounded-lg py-1 px-2"
             onClick={signOut}
@@ -172,6 +229,7 @@ export default function Home() {
                     room={room}
                     getChatMessages={getChatMessages}
                     setChats={setChats}
+                    setCurrentChat={setCurrentChat}
                   />
                 </div>
               ))}
@@ -179,11 +237,11 @@ export default function Home() {
         </div>
 
         <div className="w-[80%]">
-          <div className="h-[900px] overflow-scroll p-5">
+          <div className="flex justify-end items-end mb-7">
             {!!currentChat ? (
               <>
                 <button
-                  className="px-6 py-1 mb-5 rounded-xl border-2 border-black bg-red-800 hover:bg-red-500 hover:text-black transition-all "
+                  className="px-6 py-1 rounded-xl border-2 border-black bg-red-800 hover:bg-red-500 hover:text-black transition-all "
                   onClick={() => {
                     handleExitRoom();
                   }}
@@ -194,36 +252,52 @@ export default function Home() {
             ) : (
               <></>
             )}
-            {!!messages &&
-              messages.map((msg) => (
-                <div key={msg.id}>
-                  <Message
-                    msg={msg}
-                    currentChat={currentChat}
-                    setMessages={setMessages}
-                  />
-                </div>
-              ))}
           </div>
 
-          <div className="h-[10%]">
+          <div className="min-h-screen flex flex-col justify-between p-5 pb-0">
+            <div className="overflow-scroll">
+              {!!messages &&
+                messages.map((msg) => (
+                  <div key={msg.id}>
+                    <Message
+                      msg={msg}
+                      currentChat={currentChat}
+                      setMessages={setMessages}
+                    />
+                  </div>
+                ))}
+            </div>
             {currentChat ? (
-              <form className="flex flex-row" onSubmit={handleCreateMessage}>
-                <input
-                  className="text-black text-base px-3 py-1 flex-grow rounded-xl"
-                  type="text"
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                  }}
-                  value={newMessage}
-                />
-                <button
-                  className="py-2 px-6 ml-6 rounded-xl border-2 border-black bg-green-800 hover:bg-green-500 hover:text-black transition-all"
-                  type="submit"
+              <div className="flex flex-col justify-center items-center">
+                <form
+                  className="flex flex-row w-full"
+                  onSubmit={handleCreateMessage}
                 >
-                  Enter
-                </button>
-              </form>
+                  <input
+                    className="text-black text-base px-3 py-1 flex-grow rounded-xl"
+                    type="text"
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                    }}
+                    value={newMessage}
+                  />
+                  <button
+                    className="py-2 px-6 ml-6 rounded-xl border-2 border-black bg-green-800 hover:bg-green-500 hover:text-black transition-all"
+                    type="submit"
+                  >
+                    Enter
+                  </button>
+                </form>
+                <form className="mt-5" onSubmit={handleSend}>
+                  <input type="file" onChange={handleFileChange} />
+                  <button
+                    className="py-2 px-6 rounded-xl border-2 border-black bg-green-800 hover:bg-green-500 hover:text-black transition-all"
+                    type="submit"
+                  >
+                    Upload
+                  </button>
+                </form>
+              </div>
             ) : (
               <></>
             )}

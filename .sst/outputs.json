@@ -1,0 +1,20 @@
+{
+  "prod-week13-MediaAssets": {
+    "BucketName": "prod-week13-mediaassets-uploadsbucketc4b27cc7-wvly7k18gxx4"
+  },
+  "prod-week13-API": {
+    "UserPoolClientId": "4vf08f288manoqqpp6f29s84it",
+    "UserPoolId": "us-east-2_bl6MYKfsF",
+    "ApiEndpoint": "https://y6vs48qmf4.execute-api.us-east-2.amazonaws.com",
+    "IdentityPoolId": "us-east-2:82dae281-e88b-47ee-9446-237ee7d179e7"
+  },
+  "prod-week13-FrontendStack": {
+    "ReactSiteSstSiteEnvVITEAPPIDENTITYPOOLIDD18F981A": "us-east-2:82dae281-e88b-47ee-9446-237ee7d179e7",
+    "ReactSiteSstSiteEnvVITEAPPREGION6FF9BE90": "us-east-2",
+    "ReactSiteSstSiteEnvVITEAPPAPIURL58A1382F": "https://y6vs48qmf4.execute-api.us-east-2.amazonaws.com",
+    "ReactSiteSstSiteEnvVITEAPPUSERPOOLCLIENTID2A01D582": "4vf08f288manoqqpp6f29s84it",
+    "ReactSiteSstSiteEnvVITEAPPUSERPOOLID251FB503": "us-east-2_bl6MYKfsF",
+    "SiteUrl": "https://d2m7edo4g8cla6.cloudfront.net",
+    "ReactSiteSstSiteEnvVITEAPPS3BUCKETNAME29E44D27": "prod-week13-mediaassets-uploadsbucketc4b27cc7-wvly7k18gxx4"
+  }
+}

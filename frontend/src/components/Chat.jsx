@@ -2,35 +2,46 @@ import { useState } from "react";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { Auth, API } from "aws-amplify";
 
-export default function Chat({ room, getChatMessages, setChats }) {
+export default function Chat({
+  room,
+  getChatMessages,
+  setChats,
+  setCurrentChat,
+}) {
   const { user } = useAuthenticator((context) => [context.user]);
   const [updateChat, setUpdateChat] = useState("");
   const [form, setForm] = useState(false);
 
   const handleDeleteChat = async (id) => {
-    await API.del("api", `/chats/${id}`, {
-      headers: {
-        Authorization: `Bearer ${(await Auth.currentSession())
-          .getAccessToken()
-          .getJwtToken()}`,
+    const tokens = await Auth.currentSession();
+
+    // grab sub
+    const sub = tokens.accessToken.payload.sub;
+
+    const res = await API.del("api", `/chats/${id}`, {
+      body: {
+        sub: sub,
       },
-    }).then((res) => setChats(res.chats));
+    });
+    setChats(res.chats);
+    setCurrentChat("");
   };
 
   const handleUpdateChat = async (e) => {
     e.preventDefault();
 
-    await API.put("api", `/chats/${room.id}`, {
+    const tokens = await Auth.currentSession();
+
+    // grab sub
+    const sub = tokens.accessToken.payload.sub;
+
+    const res = await API.put("api", `/chats/${room.id}`, {
       body: {
         newName: updateChat,
+        sub: sub,
       },
-      headers: {
-        Authorization: `Bearer ${(await Auth.currentSession())
-          .getAccessToken()
-          .getJwtToken()}`,
-      },
-    }).then((res) => setChats(res.chats));
-
+    });
+    setChats(res.chats);
     setUpdateChat("");
     setForm(false);
   };
